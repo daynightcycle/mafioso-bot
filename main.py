@@ -6,10 +6,10 @@ import asyncio
 from collections import Counter
 import discord
 from discord.ext import commands
-from discord.ext.commands import Bot
 from discord.utils import get
-import neverSleep
 import os
+from os import environ
+from os.path import exists
 import random
 
 
@@ -23,275 +23,377 @@ bot = commands.Bot(command_prefix='m!', intents=intents)
 # Permission Checks
 
 
-def is_owner():
-    def predicate(ctx):
-        return 635543231895044107 == ctx.author.id
-    return commands.check(predicate)
-
-
+# Checks if the command message's author is an owner of the command message's guild.
+# https://discordpy.readthedocs.io/en/stable/ext/commands/commands.html#checks
 def is_guild_owner():
     def predicate(ctx):
         return ctx.guild is not None and ctx.guild.owner_id == ctx.author.id
     return commands.check(predicate)
 
 
+# Checks if the command message's author has the host role designated for their guild.
+# https://discordpy.readthedocs.io/en/stable/ext/commands/commands.html#checks
+# https://discordpy.readthedocs.io/en/stable/api.html#discord.Guild.id
 def is_host():
     def predicate(ctx):
-        guild = ctx.message.guild
-        guild_file = 'guild' + str(guild.id) + '.txt'
-        with open(guild_file, 'r') as fp:
-            contents = fp.readlines()
-        stripped_in_id = contents[12].strip('\n')
-        raw_in_id = stripped_in_id[len('Host Role: '):]
-        for role in ctx.author.roles:
-            if role.id == raw_in_id:
-                return role.id == raw_in_id
+        host_role_id = get_guild_value(ctx, 'role_host')  # This gets the ID for the server's host role.
+        for role in ctx.author.roles:  # Each role the command message's author has is checked. If they have the host role, the module predicate() returns True.
+            if role.id == host_role_id:
+                return True
     return commands.check(predicate)
 
 
-# Guild Shortcuts
+# ID and File Search
 
 
-def mafiguildindex(target):
-    if target == 'chanann':
+# Returns a Discord ID for a channel or role saved to the guide file. This module should NOT be used to get a guild's game file; use get_game_file() instead.
+# https://stackabuse.com/python-remove-the-prefix-and-suffix-from-a-string/
+def get_guild_value(ctx, target):
+    guild_file = 'guild' + str(ctx.message.guild.id) + '.txt'  # Uses the command message's guild ID to construct the guild file path.
+    if exists(guild_file):  # Checks if the guild file path exists.
+        with open(guild_file, 'r') as fp:  # Reads the guild file into the contents[] list.
+            contents = fp.readlines()
+            if get_guild_index(target) < 16:
+                return int(contents[get_guild_index(target)][len(get_guild_prefix(target)):].strip('\n'))  # Removes the prefix and line breaks from the target ID. The ID is converted to an integer and returned.
+            else:
+                return contents[19][len('Game Open: '):].strip('\n')  # Removes the prefix and line breaks from the target game file. The game file is returned as a string.
+    else:
+        await ctx.channel.send('Guild file not found.')
+        return None  # None is returned if no guild file has been created yet.
+
+
+def get_game_value(ctx, target):
+    game_file = get_guild_value(ctx, 'game_open')
+    if exists(game_file):
+        with open(game_file, 'r') as fp:
+            contents = fp.readlines()
+            if get_guild_index(target) == 1:
+                return int(contents[1][len('Time: '):].strip('\n'))
+            else:
+                return ast.literal_eval(contents[get_game_index(target)][len(get_game_prefix(target)):].strip('\n'))
+    else:
+        await ctx.channel.send('Guild file not found.')
+        return None
+
+
+# Guild File Shortcuts
+
+
+# Returns a target guild file index.
+def get_guild_index(target):
+    if target == 'chan_ann':
         return 1
-    if target == 'chanbot':
+    if target == 'chan_bot':
         return 2
-    if target == 'chancoven':
+    if target == 'chan_coven':
         return 3
-    if target == 'chand2m':
+    if target == 'chan_data':
         return 4
-    if target == 'chandata':
+    if target == 'chan_day':
         return 5
-    if target == 'chanday':
+    if target == 'chan_dead':
         return 6
-    if target == 'chandead':
+    if target == 'role_dead':
         return 7
-    if target == 'roledead':
+    if target == 'chan_end':
         return 8
-    if target == 'chanend':
+    if target == 'user_ex':
         return 9
-    if target == 'exuser':
+    if target == 'chan_host':
         return 10
-    if target == 'chanhost':
+    if target == 'role_host':
         return 11
-    if target == 'rolehost':
+    if target == 'chan_interest':
         return 12
-    if target == 'chaninter':
+    if target == 'chan_mafia':
         return 13
-    if target == 'chanm2d':
+    if target == 'role_player':
         return 14
-    if target == 'chanmafia':
+    if target == 'chan_vote':
         return 15
-    if target == 'roleplayer':
+    if target == 'game_open':
         return 16
-    if target == 'chanseance':
-        return 17
-    if target == 'chanvote':
-        return 18
-    if target == 'gameopen':
-        return 19
 
 
-def mafiguildprefix(target):
-    if target == 'chanann':
+# Returns a target guild file prefix.
+def get_guild_prefix(target):
+    if target == 'chan_ann':
         return 'Announcement Channel: '
-    if target == 'chanbot':
+    if target == 'chan_bot':
         return 'Bot Log Channel: '
-    if target == 'chancoven':
+    if target == 'chan_coven':
         return 'Coven Channel: '
-    if target == 'chand2m':
-        return 'D2M Channel: '
-    if target == 'chandata':
+    if target == 'chan_data':
         return 'Data Channel: '
-    if target == 'chanday':
+    if target == 'chan_day':
         return 'Day Phase Channel: '
-    if target == 'chandead':
+    if target == 'chan_dead':
         return 'Dead Channel: '
-    if target == 'roledead':
+    if target == 'role_dead':
         return 'Dead Role: '
-    if target == 'chanend':
+    if target == 'chan_end':
         return 'End Channel: '
-    if target == 'exuser':
+    if target == 'user_ex':
         return 'Example User: '
-    if target == 'chanhost':
+    if target == 'chan_host':
         return 'Host Channel: '
-    if target == 'rolehost':
+    if target == 'role_host':
         return 'Host Role: '
-    if target == 'chaninter':
+    if target == 'chan_interest':
         return 'Interest Check Channel: '
-    if target == 'chanm2d':
-        return 'M2D Channel: '
-    if target == 'chanmafia':
+    if target == 'chan_mafia':
         return 'Mafia Channel: '
-    if target == 'roleplayer':
+    if target == 'role_player':
         return 'Player Role: '
-    if target == 'chanseance':
-        return 'Seance Channel: '
-    if target == 'chanvote':
+    if target == 'chan_vote':
         return 'Voting Channel: '
-    if target == 'gameopen':
+    if target == 'game_open':
         return 'Game Open: '
 
 
-def mafiguildvalue(guild, target):
-    guild_file = 'guild' + str(guild.id) + '.txt'
-    with open(guild_file, 'r') as fp:
-        contents = fp.readlines()
-    if 1 <= mafiguildindex(target) <= 18:
-        stripped_target = contents[mafiguildindex(target)].strip('\n')
-        fp.close()
-        return int(stripped_target[len(mafiguildprefix(target)):])
-    elif 19 == mafiguildindex(target):
-        stripped_target = contents[19].strip('\n')
-        fp.close()
-        return stripped_target[len('Game Open: '):]
-    else:
-        print('You stepped on a lego: Index not found in mafiaguildvalue().')
+# Game File Shortcuts
 
 
-# Game Shortcuts
-
-
-def mafigameindex(target):
+def get_game_index(target):
     if target == 'time':
         return 1
     if target == 'hosts':
         return 2
-    if target == 'hostnames':
+    if target == 'host_names':
         return 3
-    if target == 'hostmentions':
+    if target == 'host_mentions':
         return 4
     if target == 'alive':
         return 5
-    if target == 'alivenames':
+    if target == 'alive_names':
         return 6
-    if target == 'alivementions':
+    if target == 'alive_mentions':
         return 7
-    if target == 'dead':
-        return 8
-    if target == 'deadnames':
-        return 9
-    if target == 'deadmentions':
-        return 10
-    if target == 'votes':
-        return 11
-    if target == 'votenames':
-        return 12
-    if target == 'votementions':
-        return 13
-    if target == 'voters':
-        return 14
-    if target == 'voternames':
-        return 15
-    if target == 'votermentions':
-        return 16
-    if target == 'earlyvoters':
-        return 17
-    if target == 'earlyvoternames':
-        return 18
-    if target == 'earlyvotermentions':
-        return 19
-    if target == 'mediums':
-        return 20
-    if target == 'mediumnames':
-        return 21
-    if target == 'mediummentions':
-        return 22
-    if target == 'seances':
-        return 23
-    if target == 'mafia':
-        return 24
-    if target == 'mafianames':
-        return 25
-    if target == 'mafiamentions':
-        return 26
-    if target == 'coven':
-        return 27
-    if target == 'covennames':
-        return 28
-    if target == 'covenmentions':
-        return 29
     if target == 'emotes':
+        return 8
+    if target == 'dead':
+        return 9
+    if target == 'dead_names':
+        return 10
+    if target == 'dead_mentions':
+        return 11
+    if target == 'votes':
+        return 12
+    if target == 'vote_names':
+        return 13
+    if target == 'vote_mentions':
+        return 14
+    if target == 'voters':
+        return 15
+    if target == 'voter_names':
+        return 16
+    if target == 'voter_mentions':
+        return 17
+    if target == 'early_voters':
+        return 18
+    if target == 'early_voter_names':
+        return 19
+    if target == 'early_voter_mentions':
+        return 20
+    if target == 'medium':
+        return 21
+    if target == 'medium_names':
+        return 22
+    if target == 'medium_mentions':
+        return 23
+    if target == 'seances':
+        return 24
+    if target == 'mafia':
+        return 25
+    if target == 'mafia_names':
+        return 26
+    if target == 'mafia_mentions':
+        return 27
+    if target == 'coven':
+        return 28
+    if target == 'coven_names':
+        return 29
+    if target == 'coven_mentions':
         return 30
 
 
-def mafigameprefix(target):
+def get_game_prefix(target):
     if target == 'time':
         return 'Time: '
     if target == 'hosts':
         return 'Hosts: '
-    if target == 'hostnames':
+    if target == 'host_names':
         return 'Host Names: '
-    if target == 'hostmentions':
+    if target == 'host_mentions':
         return 'Host Mentions: '
     if target == 'alive':
         return 'Alive: '
-    if target == 'alivenames':
+    if target == 'alive_names':
         return 'Alive Names: '
-    if target == 'alivementions':
+    if target == 'alive_mentions':
         return 'Alive Mentions: '
+    if target == 'emotes':
+        return 'Emotes: '
     if target == 'dead':
         return 'Dead: '
-    if target == 'deadnames':
+    if target == 'dead_names':
         return 'Dead Names: '
-    if target == 'deadmentions':
+    if target == 'dead_mentions':
         return 'Dead Mentions: '
     if target == 'votes':
         return 'Votes: '
-    if target == 'votenames':
+    if target == 'vote_names':
         return 'Vote Names: '
-    if target == 'votementions':
+    if target == 'vote_mentions':
         return 'Vote Mentions: '
     if target == 'voters':
         return 'Voters: '
-    if target == 'voternames':
+    if target == 'voter_names':
         return 'Voter Names: '
-    if target == 'votermentions':
+    if target == 'voter_mentions':
         return 'Voter Mentions: '
-    if target == 'earlyvoters':
+    if target == 'early_voters':
         return 'Early Voters: '
-    if target == 'earlyvoternames':
+    if target == 'early_voter_names':
         return 'Early Voter Names: '
-    if target == 'earlyvotermentions':
+    if target == 'early_voter_mentions':
         return 'Early Voter Mentions: '
-    if target == 'mediums':
+    if target == 'medium':
         return 'Mediums: '
-    if target == 'mediumnames':
+    if target == 'medium_names':
         return 'Medium Names: '
-    if target == 'mediummentions':
+    if target == 'medium_mentions':
         return 'Medium Mentions: '
     if target == 'seances':
         return 'Seances: '
     if target == 'mafia':
         return 'Mafia: '
-    if target == 'mafianames':
+    if target == 'mafia_names':
         return 'Mafia Names: '
-    if target == 'mafiamentions':
+    if target == 'mafia_mentions':
         return 'Mafia Mentions: '
     if target == 'coven':
         return 'Coven: '
-    if target == 'covennames':
+    if target == 'coven_names':
         return 'Coven Names: '
-    if target == 'covenmentions':
+    if target == 'coven_mentions':
         return 'Coven Mentions: '
-    if target == 'emotes':
-        return 'Emotes: '
 
 
-def mafigamevalue(in_file, target):
-    with open(in_file, 'r') as fp:
-        contents = fp.readlines()
-    if 1 == mafigameindex(target):
-        stripped_target = contents[1].strip('\n')
-        fp.close()
-        return int(stripped_target[len('Time: '):])
-    elif 2 <= mafigameindex(target) <= 30:
-        stripped_target = contents[mafigameindex(target)].strip('\n')
-        fp.close()
-        return ast.literal_eval(stripped_target[len(mafigameprefix(target)):])
+# Setup
+
+
+@bot.command()
+@commands.check_any(is_guild_owner(), commands.is_owner())
+async def server_setup(ctx):
+    guild_file = 'guild' + str(ctx.message.guild.id) + '.txt'
+    if not os.path.exists(guild_file):
+        with open(guild_file, 'w') as fp:
+            fp.write(ctx.message.guild.name + '\nAnnouncement Channel: \nBot Log Channel: \nCoven Channel: \nD2M Channel: \nData Channel: \nDay Phase Channel: \nDead Channel: \nDead Role: \nEnd Channel: \nExample User: \nHost Channel: \nHost Role: \nInterest Check Channel: \nM2D Channel: \nMafia Channel: \nPlayer Role: \nSeance Channel: \nVoting Channel: \nGame Open: None\n')
+        await ctx.channel.send(guild_file + ' has been created for **' + ctx.message.guild.name + '.**')
     else:
-        print('You stepped on a lego: Index not found in mafiagamevalue().')
+        await ctx.channel.send('This server has already been set up.')
+
+
+@bot.command()
+@commands.check_any(is_guild_owner(), commands.is_owner())
+async def hosts(ctx, in_role):
+    guild_file = 'guild' + str(ctx.message.guild.id) + '.txt'
+    with open(guild_file, 'r') as fp:
+        contents = fp.readlines()
+    if in_role.isdigit():
+        for role in ctx.message.guild.roles:
+            if role.id == in_role:
+                role_name = role.name
+                contents[11] = 'Host Role: ' + str(role.id) + '\n'
+    elif in_role.startswith('<@&'):
+        role_id = int(in_role[len('<@&'):len('>')])
+        for role in ctx.message.guild.roles:
+            if role.id == role_id:
+                role_name = role.name
+                contents[11] = 'Host Role: ' + str(role.id) + '\n'
+    else:
+        for role in ctx.message.guild.roles:
+            if role.name == in_role:
+                role_name = role.name
+                contents[11] = 'Host Role: ' + str(role.id) + '\n'
+    with open(guild_file, 'w') as fp:
+        fp.writelines(contents)
+    await ctx.channel.send('**' + role_name + '**' + ' is now the Host Role.')
+
+
+@bot.command()
+@commands.check_any(is_guild_owner(), is_host(), commands.is_owner())
+async def create_game(ctx):
+    guild = ctx.message.guild
+    if get_guild_value(ctx, 'game_open') == 'None':
+        hosts = [member.id for member in get_guild_value(ctx, 'role_host')]
+        host_names = [member.name for member in get_guild_value(ctx, 'role_host')]
+        host_mentions = [member.mention for member in get_guild_value(ctx, 'role_host')]
+        alive = [member.id for member in get_guild_value(ctx, 'role_player')]
+        alive_names = [member.name for member in get_guild_value(ctx, 'role_player')]
+        alive_mentions = [member.mention for member in get_guild_value(ctx, 'role_player')]
+        emotes = []
+        unused_emotes = ['❤', '🍎', '📙', '🔥', '⭐', '🌻', '🌖', '🟢', '🌲', '🔷', '🎵', '🌊', '🟪', '☂', '🌈', '☁', '⚙', '⚽', '📷', '🔑']
+        for _ in range(len(alive)):
+            user_emote = random.choice(unused_emotes)
+            unused_emotes.remove(user_emote)
+            emotes.append(user_emote)
+        dead = [member.id for member in get_guild_value(ctx, 'role_dead')]
+        dead_names = [member.name for member in get_guild_value(ctx, 'role_dead')]
+        dead_mentions = [member.mention for member in get_guild_value(ctx, 'role_dead')]
+        with open('game_count.txt', 'w+') as fp:
+            contents = fp.readlines()
+            game_id = int(contents[0]) + 1
+            fp.writelines(str(game_id))
+        game_file = 'game' + str(game_id) + '.txt'
+        with open(game_file, 'w') as fp:
+            fp.write('ID: ' + str(game_id) + '\nTime: 0\nHosts: ' + str(hosts) + '\nHost Names: ' + str(host_names) + '\nHost Mentions: ' + str(host_mentions) + '\nAlive: ' + str(alive) + '\nAlive Names: ' + str(alive_names) + '\nAlive Mentions: ' + str(alive_mentions) + '\nEmotes: ' + str(emotes) + '\nDead: ' + str(dead) + '\nDead Names: ' + str(dead_names) + '\nDead Mentions: ' + str(dead_mentions) + '\nVotes: []\nVote Names: []\nVote Mentions: []\nVoters: []\nVoter Names: []\nVoter Mentions: []\nEarly Voters: []\nEarly Voter Names: []\nEarly Voter Mentions: []\nMediums: []\nMedium Names: []\nMedium Mentions: []\nSeances: []\nMafia: []\nMafia Names: []\nMafia Mentions: []\nCoven: []\nCoven Names: []\nCoven Mentions: []')
+        with open('guild' + str(guild.id) + '.txt', 'w+'):
+            contents = fp.readlines()
+            contents[16] = 'Game Open: ' + game_file
+            fp.writelines(contents)
+        await ctx.channel.send(game_file + ' has been created for **' + ctx.message.guild.name + '.**')
+        role_player = get(guild.roles, id=get_guild_value(ctx, 'role_player'))
+        role_dead = get(guild.roles, id=get_guild_value(ctx, 'role_dead'))
+        chan_ann = bot.get_channel(get_guild_value(ctx, 'chan_ann'))
+        chan_bot = bot.get_channel(get_guild_value(ctx, 'chan_bot'))
+        chan_coven = bot.get_channel(get_guild_value(ctx, 'chan_coven'))
+        chan_data = bot.get_channel(get_guild_value(ctx, 'chan_data'))
+        chan_day = bot.get_channel(get_guild_value(ctx, 'chan_day'))
+        chan_dead = bot.get_channel(get_guild_value(ctx, 'chan_dead'))
+        chan_end = bot.get_channel(get_guild_value(ctx, 'chan_end'))
+        chan_host = bot.get_channel(get_guild_value(ctx, 'chan_host'))
+        chan_mafia = bot.get_channel(get_guild_value(ctx, 'chan_mafia'))
+        chan_vote = bot.get_channel(get_guild_value(ctx, 'chan_vote'))
+        await role_player.edit(permissions=discord.Permissions(change_nickname=False))
+        await role_dead.edit(permissions=discord.Permissions(change_nickname=False))
+        await chan_ann.set_permissions(role_player, read_messages=True, send_messages=False, add_reactions=False)
+        await chan_ann.set_permissions(role_dead, read_messages=True, send_messages=False, add_reactions=False)
+        await chan_bot.set_permissions(role_player, read_messages=False, send_messages=False, add_reactions=False)
+        await chan_bot.set_permissions(role_dead, read_messages=False, send_messages=False, add_reactions=False)
+        await chan_coven.set_permissions(role_player, read_messages=False, send_messages=False, add_reactions=False)
+        await chan_coven.set_permissions(role_dead, read_messages=False, send_messages=False, add_reactions=False)
+        await chan_data.set_permissions(role_player, read_messages=False, send_messages=False, add_reactions=False)
+        await chan_data.set_permissions(role_dead, read_messages=False, send_messages=False, add_reactions=False)
+        await chan_day.set_permissions(role_player, read_messages=True, send_messages=False, add_reactions=False)
+        await chan_day.set_permissions(role_dead, read_messages=True, send_messages=False, add_reactions=False)
+        await chan_dead.set_permissions(role_player, read_messages=False, send_messages=False, add_reactions=False)
+        await chan_dead.set_permissions(role_dead, read_messages=True, send_messages=True, add_reactions=True)
+        await chan_end.set_permissions(role_player, read_messages=True, send_messages=False, add_reactions=False)
+        await chan_end.set_permissions(role_dead, read_messages=True, send_messages=False, add_reactions=False)
+        await chan_host.set_permissions(role_player, read_messages=False, send_messages=False, add_reactions=False)
+        await chan_host.set_permissions(role_dead, read_messages=False, send_messages=False, add_reactions=False)
+        await chan_mafia.set_permissions(role_player, read_messages=False, send_messages=False, add_reactions=False)
+        await chan_mafia.set_permissions(role_dead, read_messages=False, send_messages=False, add_reactions=False)
+        await chan_vote.set_permissions(role_player, read_messages=True, send_messages=False, add_reactions=False)
+        await chan_vote.set_permissions(role_dead, read_messages=True, send_messages=False, add_reactions=False)
+        await ctx.channel.send('Permissions have been assigned.')
+    else:
+        await ctx.channel.send('There is already an active game in this server.')
+
+
+# unedited
 
 
 # User Shortcuts
@@ -333,67 +435,11 @@ def most_common(in_list):
     return data.most_common(1)[0][0]
 
 
-
-# Permissions: Bot Owner and Server Owners
-
-
-@bot.command()
-@commands.check_any(is_guild_owner(), is_owner())
-async def hosts(ctx, in_role):
-    guild = ctx.message.guild
-    guild_file = 'guild' + str(guild.id) + '.txt'
-    with open(guild_file, 'r') as fp:
-        contents = fp.readlines()
-    if in_role.startswith('<@&'):
-        stripped_in_role = in_role.strip('>')
-        raw_in_role = int(stripped_in_role[len('<@&'):])
-        for role in guild.roles:
-            if role.id == raw_in_role:
-                role_name = role.name
-                contents[12] = 'Host Role: ' + str(role.id) + '\n'
-        with open(guild_file, 'w') as fp:
-            fp.writelines(contents)
-        fp.close()
-        await ctx.channel.send('**' + role_name + '**' + ' is now the Host Role.')
-        return
-    if in_role.isdigit():
-        for role in guild.roles:
-            if role.id == int(in_role):
-                role_name = role.name
-                contents[12] = 'Host Role: ' + str(role.id) + '\n'
-        with open(guild_file, 'w') as fp:
-            fp.writelines(contents)
-        fp.close()
-        await ctx.channel.send('**' + role_name + '**' + ' is now the Host Role.')
-        return
-    for role in guild.roles:
-        if role.name == in_role:
-            role_name = role.name
-            contents[12] = 'Host Role: ' + str(role.id) + '\n'
-    with open(guild_file, 'w') as fp:
-        fp.writelines(contents)
-    fp.close()
-    await ctx.channel.send('**' + role_name + '**' + ' is now the Host Role.')
-
-
-@bot.command()
-@commands.check_any(is_guild_owner(), is_owner())
-async def setup(ctx):
-    guild_file = 'guild' + str(ctx.message.guild.id) + '.txt'
-    if not os.path.exists(guild_file):
-        with open(guild_file, 'w') as fp:
-            fp.write(ctx.message.guild.name + '\nAnnouncement Channel: \nBot Log Channel: \nCoven Channel: \nD2M Channel: \nData Channel: \nDay Phase Channel: \nDead Channel: \nDead Role: \nEnd Channel: \nExample User: \nHost Channel: \nHost Role: \nInterest Check Channel: \nM2D Channel: \nMafia Channel: \nPlayer Role: \nSeance Channel: \nVoting Channel: \nGame Open: None\n')
-        fp.close()
-        await ctx.channel.send(guild_file + ' has been created for **' + ctx.message.guild.name + '.**')
-    else:
-        await ctx.channel.send('This server has already been set up.')
-
-
 # Permissions: Hosts
 
 
 @bot.command()
-@commands.check_any(is_guild_owner(), is_host(), is_owner())
+@commands.check_any(is_guild_owner(), is_host(), commands.is_owner())
 async def addcov(ctx, in_user):
     guild = ctx.message.guild
     if os.path.exists(mafiguildvalue(guild, 'gameopen')):
@@ -457,7 +503,7 @@ async def addcov(ctx, in_user):
 
 
 @bot.command()
-@commands.check_any(is_guild_owner(), is_host(), is_owner())
+@commands.check_any(is_guild_owner(), is_host(), commands.is_owner())
 async def addexuser(ctx, in_user):
     guild = ctx.message.guild
     guild_file = 'guild' + str(guild.id) + '.txt'
@@ -494,7 +540,7 @@ async def addexuser(ctx, in_user):
 
 
 @bot.command()
-@commands.check_any(is_guild_owner(), is_host(), is_owner())
+@commands.check_any(is_guild_owner(), is_host(), commands.is_owner())
 async def addmaf(ctx, in_user):
     guild = ctx.message.guild
     if os.path.exists(mafiguildvalue(guild, 'gameopen')):
@@ -558,7 +604,7 @@ async def addmaf(ctx, in_user):
 
 
 @bot.command()
-@commands.check_any(is_guild_owner(), is_host(), is_owner())
+@commands.check_any(is_guild_owner(), is_host(), commands.is_owner())
 async def addmed(ctx, in_user):
     guild = ctx.message.guild
     if os.path.exists(mafiguildvalue(guild, 'gameopen')):
@@ -624,7 +670,7 @@ async def addmed(ctx, in_user):
 
 
 @bot.command()
-@commands.check_any(is_guild_owner(), is_host(), is_owner())
+@commands.check_any(is_guild_owner(), is_host(), commands.is_owner())
 async def caste(ctx, type, in_role):
     guild = ctx.message.guild
     guild_file = 'guild' + str(guild.id) + '.txt'
@@ -666,7 +712,7 @@ async def caste(ctx, type, in_role):
 
 
 @bot.command()
-@commands.check_any(is_guild_owner(), is_host(), is_owner())
+@commands.check_any(is_guild_owner(), is_host(), commands.is_owner())
 async def chan(ctx, type):
     guild = ctx.message.guild
     guild_file = 'guild' + str(guild.id) + '.txt'
@@ -680,94 +726,7 @@ async def chan(ctx, type):
 
 
 @bot.command()
-@commands.check_any(is_guild_owner(), is_host(), is_owner())
-async def creategame(ctx):
-    hosts = []
-    host_names = []
-    host_mentions = []
-    alive = []
-    alive_names = []
-    alive_mentions = []
-    unused_emotes = ['❤', '🍎', '📙', '🔥', '⭐', '🌻', '🌖', '🟢', '🌲', '🔷', '🎵', '🌊', '🟪', '☂', '🌈', '☁', '⚙', '⚽', '📷', '➕']
-    emotes = []
-    guild = ctx.message.guild
-    day_chat = bot.get_channel(mafiguildvalue(guild, 'chanday'))
-    vote_chat = bot.get_channel(mafiguildvalue(guild, 'chanvote'))
-    coven_chat = bot.get_channel(mafiguildvalue(guild, 'chancoven'))
-    mafia_chat = bot.get_channel(mafiguildvalue(guild, 'chanmafia'))
-    end_chat = bot.get_channel(mafiguildvalue(guild, 'chanend'))
-    dead_chat = bot.get_channel(mafiguildvalue(guild, 'chandead'))
-    data_chat = bot.get_channel(mafiguildvalue(guild, 'chandata'))
-    host_chat = bot.get_channel(mafiguildvalue(guild, 'chanhost'))
-    players = get(guild.roles, id=mafiguildvalue(guild, 'roleplayer'))
-    dead = get(guild.roles, id=mafiguildvalue(guild, 'roledead'))
-    for member in guild.members:
-        for role in member.roles:
-            if role.id == mafiguildvalue(guild, 'roledead'):
-                await ctx.channel.send('Remove the Dead Role from all users before starting a new game.')
-                return
-            if role.id == mafiguildvalue(guild, 'rolehost'):
-                hosts.append(member.id)
-                host_names.append(member.name)
-                host_mentions.append(member.mention)
-            if role.id == mafiguildvalue(guild, 'roleplayer'):
-                alive.append(member.id)
-                alive_names.append(member.name)
-                alive_mentions.append(member.mention)
-                user_emote = random.choice(unused_emotes)
-                unused_emotes.remove(user_emote)
-                emotes.append(user_emote)
-                await day_chat.set_permissions(member, read_messages=None, send_messages=None, add_reactions=None)
-                await vote_chat.set_permissions(member, read_messages=None, send_messages=None, add_reactions=None)
-                await coven_chat.set_permissions(member, read_messages=None, send_messages=None, add_reactions=None)
-                await mafia_chat.set_permissions(member, read_messages=None, send_messages=None, add_reactions=None)
-                await end_chat.set_permissions(member, read_messages=None, send_messages=None, add_reactions=None)
-                await dead_chat.set_permissions(member, read_messages=None, send_messages=None, add_reactions=None)
-                await data_chat.set_permissions(member, read_messages=None, send_messages=None, add_reactions=None)
-                await host_chat.set_permissions(member, read_messages=None, send_messages=None, add_reactions=None)
-    if mafiguildvalue(guild, 'gameopen') == 'None':
-        with open('gamecount.txt', 'r') as fp:
-            contents = fp.readlines()
-        game_id = int(contents[0]) + 1
-        with open('gamecount.txt', 'w') as fp:
-            fp.writelines(str(game_id))
-        fp.close()
-        game_file = 'game' + str(game_id) + '.txt'
-        with open(game_file, 'w+') as fp:
-            fp.write('ID: ' + str(game_id) + '\n' + 'Time: 0' + '\n' + 'Hosts: ' + str(hosts) + '\n' + 'Host Names: ' + str(host_names) + '\n' + 'Host Mentions: ' + str(host_mentions) + '\n' + 'Alive: ' + str(alive) + '\n' + 'Alive Names: ' + str(alive_names) + '\n' + 'Alive Mentions: ' + str(alive_mentions) + '\n' + 'Dead: []\nDead Names: []\nDead Mentions: []\nVotes: []\nVote Names: []\nVote Mentions: []\nVoters: []\nVoter Names: []\nVoter Mentions: []\nEarly Voters: []\nEarly Voter Names: []\nEarly Voter Mentions: []\nMediums: []\nMedium Names: []\nMedium Mentions: []\nSeances: []\nMafia: []\nMafia Names: []\nMafia Mentions: []\nCoven: []\nCoven Names: []\nCoven Mentions: []\nEmotes: ' + str(emotes) + '\n')
-            fp.close()
-        guild_file = 'guild' + str(guild.id) + '.txt'
-        with open(guild_file, 'r') as fp:
-            contents = fp.readlines()
-        contents[mafiguildindex('gameopen')] = mafiguildprefix('gameopen') + game_file + '\n'
-        with open(guild_file, 'w') as fp:
-            fp.writelines(contents)
-        fp.close()
-        await players.edit(permissions=discord.Permissions(change_nickname=False))
-        await dead.edit(permissions=discord.Permissions(change_nickname=False))
-        await day_chat.set_permissions(players, read_messages=True, send_messages=False, add_reactions=False)
-        await day_chat.set_permissions(dead, read_messages=True, send_messages=False, add_reactions=False)
-        await vote_chat.set_permissions(players, read_messages=True, send_messages=False, add_reactions=False)
-        await vote_chat.set_permissions(dead, read_messages=True, send_messages=False, add_reactions=False)
-        await coven_chat.set_permissions(players, read_messages=False, send_messages=False, add_reactions=False)
-        await coven_chat.set_permissions(dead, read_messages=False, send_messages=False, add_reactions=False)
-        await mafia_chat.set_permissions(players, read_messages=False, send_messages=False, add_reactions=False)
-        await mafia_chat.set_permissions(dead, read_messages=False, send_messages=False, add_reactions=False)
-        await end_chat.set_permissions(players, read_messages=True, send_messages=False, add_reactions=False)
-        await end_chat.set_permissions(dead, read_messages=True, send_messages=False, add_reactions=False)
-        await dead_chat.set_permissions(players, read_messages=False, send_messages=False, add_reactions=False)
-        await dead_chat.set_permissions(dead, read_messages=True, send_messages=True, add_reactions=True)
-        await data_chat.set_permissions(players, read_messages=False, send_messages=False, add_reactions=False)
-        await data_chat.set_permissions(dead, read_messages=False, send_messages=False, add_reactions=False)
-        await host_chat.set_permissions(players, read_messages=False, send_messages=False, add_reactions=False)
-        await host_chat.set_permissions(dead, read_messages=False, send_messages=False, add_reactions=False)
-        await ctx.channel.send(game_file + ' has been created for **' + ctx.message.guild.name + '.**')
-    else:
-        await ctx.channel.send('There is already an active game in this server.')
-
-
-@bot.command()
-@commands.check_any(is_guild_owner(), is_host(), is_owner())
+@commands.check_any(is_guild_owner(), is_host(), commands.is_owner())
 async def removecov(ctx, in_user):
     guild = ctx.message.guild
     if os.path.exists(mafiguildvalue(guild, 'gameopen')):
@@ -823,7 +782,7 @@ async def removecov(ctx, in_user):
 
 
 @bot.command()
-@commands.check_any(is_guild_owner(), is_host(), is_owner())
+@commands.check_any(is_guild_owner(), is_host(), commands.is_owner())
 async def removemaf(ctx, in_user):
     guild = ctx.message.guild
     if os.path.exists(mafiguildvalue(guild, 'gameopen')):
@@ -879,7 +838,7 @@ async def removemaf(ctx, in_user):
 
 
 @bot.command()
-@commands.check_any(is_guild_owner(), is_host(), is_owner())
+@commands.check_any(is_guild_owner(), is_host(), commands.is_owner())
 async def removemed(ctx, in_user):
     guild = ctx.message.guild
     if os.path.exists(mafiguildvalue(guild, 'gameopen')):
@@ -937,7 +896,7 @@ async def removemed(ctx, in_user):
 
 
 @bot.command()
-@commands.check_any(is_guild_owner(), is_host(), is_owner())
+@commands.check_any(is_guild_owner(), is_host(), commands.is_owner())
 async def route(ctx, in_user):
     guild = ctx.message.guild
     user_list = []
@@ -997,7 +956,7 @@ async def route(ctx, in_user):
 
 
 @bot.command()
-@commands.check_any(is_guild_owner(), is_host(), is_owner())
+@commands.check_any(is_guild_owner(), is_host(), commands.is_owner())
 async def startday(ctx):
     guild = ctx.message.guild
     if mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'time') in [1, 2]:
@@ -1024,28 +983,32 @@ async def startday(ctx):
             fp.writelines(contents)
         fp.close()
         await day_chat.set_permissions(players, send_messages=True, add_reactions=True)
-        for i in range(len(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'mafia'))):
-            if first_day == True:
-                await mafia_chat.set_permissions(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'mafia')[i], send_messages=True, add_reactions=True)
-            else:
-                await mafia_chat.set_permissions(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'mafia')[i], send_messages=False, add_reactions=False)
-        for i in range(len(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'coven'))):
-            if first_day == True:
-                await coven_chat.set_permissions(guild.get_member(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'coven')[i]), send_messages=True, add_reactions=True)
-            else:
-                await coven_chat.set_permissions(guild.get_member(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'coven')[i]), send_messages=False, add_reactions=False)
-        await ann_chat.send('Day Phase has begun. Voting will be closed for the first 12 hours of Day Phase or until all players have used the `m!early` command.')
-        await day_chat.send('**Day Phase has begun!**')
         if first_day == True:
-            if not mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'mafia') == []:
-                await mafia_chat.send('**Mafia chat is open on the first day!**')
             if not mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'coven') == []:
-                await coven_chat.send('**Coven chat is open on the first day!**')
+                for i in range(len(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'coven'))):
+                    await coven_chat.set_permissions(guild.get_member(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'coven')[i]), read_messages=True, send_messages=True, add_reactions=True)
+                await coven_chat.send('**Coven Chat is open the first day!**')
+            if not mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'mafia') == []:
+                for i in range(len(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'mafia'))):
+                    await mafia_chat.set_permissions(guild.get_member(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'mafia')[i]), read_messages=True, send_messages=True, add_reactions=True)
+                await mafia_chat.send('**Mafia Chat is open the first day!**')
+        else:
+            if not mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'coven') == []:
+                for i in range(len(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'coven'))):
+                    await coven_chat.set_permissions(guild.get_member(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'coven')[i]), read_messages=True, send_messages=False, add_reactions=False)
+                await coven_chat.send('**Coven Chat is closed!**')
+            if not mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'mafia') == []:
+                for i in range(len(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'mafia'))):
+                    await mafia_chat.set_permissions(guild.get_member(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'mafia')[i]), read_messages=True, send_messages=False, add_reactions=False)
+                await mafia_chat.send('**Mafia Chat is closed!**')
+        ann_chat_start_message = 'Day Phase has begun. Voting will be closed for the first 12 hours of Day Phase or until all players have used the `m!early` command. **' + str(majority(len(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'alive')))) + ' votes** are needed to end the day.'
+        await ann_chat.send(ann_chat_start_message)
+        await day_chat.send('**Day Phase has begun!**')
         counter = 0
         while True:
             await asyncio.sleep(1)
             counter += 1
-            if 43200 <= counter or len(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'earlyvoters')) == len(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'alive')):
+            if 10 <= counter or len(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'earlyvoters')) == len(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'alive')):
                 with open(mafiguildvalue(guild, 'gameopen'), 'r') as fp:
                     contents = fp.readlines()
                 contents[mafigameindex('time')] = mafigameprefix('time') + '2' + '\n'
@@ -1053,10 +1016,9 @@ async def startday(ctx):
                     fp.writelines(contents)
                 fp.close()
                 break
-        voting_message = '**Voting has begun!**\n\n*No one has voted yet.*\n'
+        voting_message = 'Voting has begun! Use `m!votes` to see a condensed voting record.\n\n*No one has voted yet.*\n\n**Majority: **' + str(majority(len(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'alive'))))
         for i in range(len(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'emotes'))):
             voting_message = voting_message + '\n' + mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'alivementions')[i] + ': ' + mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'emotes')[i]
-        voting_message = voting_message + '\n' + 'No vote: ' + '✅' + '\n' + 'Unvote: ' + '❌'
         moji = await vote_chat.send(voting_message)
         ballot = vote_chat.last_message
         for i in range(len(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'emotes'))):
@@ -1069,22 +1031,31 @@ async def startday(ctx):
             if 172800 <= counter or majority_vote(guild):
                 await ballot.clear_reactions()
                 await day_chat.set_permissions(players, send_messages=False, add_reactions=False)
-                for i in range(len(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'mafia'))):
-                    await mafia_chat.set_permissions(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'mafia')[i], send_messages=True, add_reactions=True)
-                for i in range(len(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'coven'))):
-                    await coven_chat.set_permissions(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'coven')[i], send_messages=True, add_reactions=True)
+                await day_chat.send('**Day Phase is closed!**')
+                await ann_chat.send('**The day has ended. Please wait for a host.**')
+                if not mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'coven') == []:
+                    for i in range(len(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'coven'))):
+                        await coven_chat.set_permissions(guild.get_member(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'coven')[i]), read_messages=True, send_messages=True, add_reactions=True)
+                    await coven_chat.send('**Coven Chat is open!**')
+                if not mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'mafia') == []:
+                    for i in range(len(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'mafia'))):
+                        await mafia_chat.set_permissions(guild.get_member(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'mafia')[i]), read_messages=True, send_messages=True, add_reactions=True)
+                    await mafia_chat.send('**Mafia Chat is open!**')
                 with open(mafiguildvalue(guild, 'gameopen'), 'r') as fp:
                     contents = fp.readlines()
                 contents[mafigameindex('time')] = mafigameprefix('time') + '3' + '\n'
-                contents[mafigameindex('votes')] = mafigameprefix('votes') + '\n'
-                contents[mafigameindex('voters')] = mafigameprefix('voters') + '\n'
-                contents[mafigameindex('earlyvoters')] = mafigameprefix('earlyvoters') + '\n'
-                contents[mafigameindex('earlyvoternames')] = mafigameprefix('earlyvoternames') + '\n'
-                contents[mafigameindex('earlyvotermentions')] = mafigameprefix('earlyvotermentions') + '\n'
+                contents[mafigameindex('votes')] = mafigameprefix('votes') + '[]' + '\n'
+                contents[mafigameindex('votenames')] = mafigameprefix('votenames') + '[]' + '\n'
+                contents[mafigameindex('votementions')] = mafigameprefix('votementions') + '[]' + '\n'
+                contents[mafigameindex('voters')] = mafigameprefix('voters') + '[]' + '\n'
+                contents[mafigameindex('voternames')] = mafigameprefix('voternames') + '[]' + '\n'
+                contents[mafigameindex('votermentions')] = mafigameprefix('votermentions') + '[]' + '\n'
+                contents[mafigameindex('earlyvoters')] = mafigameprefix('earlyvoters') + '[]' + '\n'
+                contents[mafigameindex('earlyvoternames')] = mafigameprefix('earlyvoternames') + '[]' + '\n'
+                contents[mafigameindex('earlyvotermentions')] = mafigameprefix('earlyvotermentions') + '[]' + '\n'
                 with open(mafiguildvalue(guild, 'gameopen'), 'w') as fp:
                     fp.writelines(contents)
                 fp.close()
-                await day_chat.send('**The day has ended. Please wait for a host.**')
                 break
 
 
@@ -1159,10 +1130,29 @@ async def hello(ctx):
     await ctx.channel.send('Hello!')
 
 
+@bot.command()
+async def votes(ctx):
+    guild = ctx.message.guild
+    message_string = ''
+    votes = mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'votes')
+    voted = list(set(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'votes')))
+    votedmentions = list(set(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'votementions')))
+    votermentions = mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'votermentions')
+    for i in range(len(voted)):
+        lynchers = []
+        vote_amount = 0
+        for j in range(len(votes)):
+            if votes[j] == voted[i]:
+                lynchers.append(votermentions[j])
+                vote_amount += 1
+        message_string = message_string + '\n\n' + votedmentions[i] + ' has **' + str(vote_amount) + ' votes** from:\n'
+        for k in range(len(lynchers)):
+            message_string = message_string + lynchers[k] + ' '
+    embedVotes = discord.Embed(title='Votes', description=message_string, color=0xdd020b)
+    await ctx.channel.send(embed=embedVotes)
+
+
 # Other Non-Commands
-
-
-@commands.cooldown(1, 30, commands.BucketType.user)
 
 
 @bot.event
@@ -1170,21 +1160,25 @@ async def on_ready():
     print('We have logged in as {0.user}'.format(bot))
 
 
+# make this time dependent
 @bot.event
 async def on_message(message):
     guild = message.channel.guild
-    if not message.author.id == 991436402652893235:
-        if os.path.exists(mafiguildvalue(guild, 'gameopen')):
-            if mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'time') == 3:
-                if not mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'mediums') == []:
-                    if message.channel.id == mafiguildvalue(guild, 'chandead'):
-                        for i in range(len(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'mediums'))):
-                            personal_chat = bot.get_channel(mafiuserchan(guild, mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'mediums')[i]))
-                            output = '**' + message.author.display_name + ':** ' + message.content
-                            if not message.attachments == []:
-                                for i in range(len(message.attachments)):
-                                    output = output + '\n' + str(message.attachments[i])
-                            await personal_chat.send(output)
+    try:
+        if not message.author.id == 991436402652893235:
+            if os.path.exists(mafiguildvalue(guild, 'gameopen')):
+                if mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'time') == 3:
+                    if not mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'mediums') == []:
+                        if message.channel.id == mafiguildvalue(guild, 'chandead'):
+                            for i in range(len(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'mediums'))):
+                                personal_chat = bot.get_channel(mafiuserchan(guild, mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'mediums')[i]))
+                                output = '**' + message.author.display_name + ':** ' + message.content
+                                if not message.attachments == []:
+                                    for i in range(len(message.attachments)):
+                                        output = output + '\n' + str(message.attachments[i])
+                                await personal_chat.send(output)
+    except FileNotFoundError:
+        pass
     await bot.process_commands(message)
 
 
@@ -1193,102 +1187,150 @@ async def on_raw_reaction_add(payload):
     guild = bot.get_guild(payload.guild_id)
     channel = bot.get_channel(payload.channel_id)
     message = await channel.fetch_message(payload.message_id)
-    if os.path.exists(mafiguildvalue(guild, 'gameopen')):
-        if payload.channel_id == mafiguildvalue(guild, 'chanvote'):
-            if not payload.member.id == 991436402652893235:
-                if message.author.id == 991436402652893235:
-                    alive = mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'alive')
-                    if payload.member.id in alive:
-                        votes = mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'votes')
-                        voters = mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'voters')
-                        emotes = mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'emotes')
-                        voting_message = message.content
-                        voting_action = 'None'
-                        if payload.member.id not in voters:
-                            if payload.emoji.name == '✅' or payload.emoji.name == '❌':
-                                if payload.emoji.name == '✅':
-                                    votes.append('None')
-                                    voters.append(payload.member.id)
-                                    voting_action = '**' + payload.member.display_name + '** has no-voted.'
-                                    if voting_message.startswith('**Voting has begun!**\n\n*No one has voted yet.*\n'):
-                                        voting_message = voting_message.replace('*No one has voted yet.*', voting_action)
-                                    else:
-                                        voting_message = voting_message.replace('\n\n<', '\n\n' + voting_action + '\n\n<')
-                                    await message.remove_reaction(payload.emoji, payload.member)
-                                elif payload.emoji.name == '❌':
-                                    await message.remove_reaction(payload.emoji, payload.member)
-                            else:
-                                if not payload.member.id == alive[emotes.index(payload.emoji.name)]:
-                                    votes.append(alive[emotes.index(payload.emoji.name)])
-                                    voters.append(payload.member.id)
-                                    voting_action = '**' + payload.member.display_name + '** has voted for ' + '**' + guild.get_member(alive[emotes.index(payload.emoji.name)]).display_name + '**.'
-                                    if voting_message.startswith('**Voting has begun!**\n\n*No one has voted yet.*\n'):
-                                        voting_message = voting_message.replace('*No one has voted yet.*', voting_action)
-                                    else:
-                                        voting_message = voting_message.replace('\n\n<', '\n\n' + voting_action + '\n\n<')
-                                    await message.remove_reaction(payload.emoji, payload.member)
-                                else:
-                                    await message.remove_reaction(payload.emoji, payload.member)
-                        else: # players who have already voted
-                            if payload.emoji.name == '✅' or payload.emoji.name == '❌':
-                                if payload.emoji.name == '✅':
-                                    if not votes[voters.index(payload.member.id)] == 'None':
-                                        votes[voters.index(payload.member.id)] = 'None'
-                                        voting_action = '**' + payload.member.display_name + '** has no-voted.'
-                                        if voting_message.startswith('**Voting has begun!**\n\n*No one has voted yet.*\n'):
+    try:
+        if os.path.exists(mafiguildvalue(guild, 'gameopen')):
+            if payload.channel_id == mafiguildvalue(guild, 'chanvote'):
+                if not payload.member.id == 991436402652893235:
+                    if message.author.id == 991436402652893235:
+                        alive = mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'alive')
+                        alivenames = mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'alivenames')
+                        alivementions = mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'alivementions')
+                        if payload.member.id in alive:
+                            votes = mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'votes')
+                            votenames = mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'votenames')
+                            votementions = mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'votementions')
+                            voters = mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'voters')
+                            voternames = mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'voternames')
+                            votermentions = mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'votermentions')
+                            emotes = mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'emotes')
+                            voting_message = message.content
+                            voting_action = 'None'
+                            day_chat = bot.get_channel(mafiguildvalue(guild, 'chanday'))
+                            if payload.member.id not in voters:
+                                if payload.emoji.name == '✅' or payload.emoji.name == '❌':
+                                    if payload.emoji.name == '✅':
+                                        votes.append('None')
+                                        votenames.append('None')
+                                        votementions.append('None')
+                                        voters.append(payload.member.id)
+                                        voternames.append(payload.member.name)
+                                        votermentions.append(payload.member.mention)
+                                        voting_action = payload.member.mention + ' has no-voted.'
+                                        voting_receipt = '**' + payload.member.display_name + '** has no-voted.'
+                                        await day_chat.send(voting_receipt)
+                                        if voting_message.startswith('Voting has begun! Use `m!votes` to see a condensed voting record.\n\n*No one has voted yet.*\n'):
                                             voting_message = voting_message.replace('*No one has voted yet.*', voting_action)
                                         else:
-                                            voting_message = voting_message.replace('\n\n<', '\n\n' + voting_action + '\n\n<')
+                                            voting_message = voting_message.replace('\n\n**Majority: **', '\n\n' + voting_action + '\n\n**Majority: **')
                                         await message.remove_reaction(payload.emoji, payload.member)
-                                    else:
-                                        await message.remove_reaction(payload.emoji, payload.member)
-                                elif payload.emoji.name == '❌':
-                                    votes.pop(voters.index(payload.member.id))
-                                    voters.remove(payload.member.id)
-                                    voting_action = '**' + payload.member.display_name + '** changed their mind.'
-                                    if voting_message.startswith('**Voting has begun!**\n\n*No one has voted yet.*\n'):
-                                        voting_message = voting_message.replace('*No one has voted yet.*', voting_action)
-                                    else:
-                                        voting_message = voting_message.replace('\n\n<', '\n\n' + voting_action + '\n\n<')
-                                    await message.remove_reaction(payload.emoji, payload.member)
-                            else:
-                                if not payload.member.id == alive[emotes.index(payload.emoji.name)]:
-                                    if not votes[voters.index(payload.member.id)] == alive[emotes.index(payload.emoji.name)]:
-                                        votes[voters.index(payload.member.id)] = alive[emotes.index(payload.emoji.name)]
-                                        voting_action = '**' + payload.member.display_name + '** has voted for ' + '**' + guild.get_member(alive[emotes.index(payload.emoji.name)]).display_name + '**.'
-                                        if voting_message.startswith('**Voting has begun!**\n\n*No one has voted yet.*\n'):
-                                            voting_message = voting_message.replace('*No one has voted yet.*', voting_action)
-                                        else:
-                                            voting_message = voting_message.replace('\n\n<', '\n\n' + voting_action + '\n\n<')
-                                        await message.remove_reaction(payload.emoji, payload.member)
-                                    else:
+                                    elif payload.emoji.name == '❌':
                                         await message.remove_reaction(payload.emoji, payload.member)
                                 else:
-                                    await message.remove_reaction(payload.emoji, payload.member)
-                        with open(mafiguildvalue(guild, 'gameopen'), 'r') as fp:
-                            contents = fp.readlines()
-                        contents[mafigameindex('votes')] = mafigameprefix('votes') + str(votes) + '\n'
-                        contents[mafigameindex('voters')] = mafigameprefix('voters') + str(voters) + '\n'
-                        with open(mafiguildvalue(guild, 'gameopen'), 'w') as fp:
-                            fp.writelines(contents)
-                        fp.close()
-                        try:
-                            await message.edit(content=voting_message)
-                        except:
-                            if channel.last_message_id == message.id:
-                                if not voting_action == 'None':
-                                    await channel.send('Ballot too long!\n\n' + voting_action)
-                            else:
-                                last_message = await channel.fetch_message(channel.last_message_id)
-                                if not voting_action == 'None':
-                                    new_content = last_message.content + '\n\n' + voting_action
-                                    try:
-                                        await last_message.edit(content=new_content)
-                                    except:
+                                    if not payload.member.id == alive[emotes.index(payload.emoji.name)]:
+                                        votes.append(alive[emotes.index(payload.emoji.name)])
+                                        votenames.append(alivenames[emotes.index(payload.emoji.name)])
+                                        votementions.append(alivementions[emotes.index(payload.emoji.name)])
+                                        voters.append(payload.member.id)
+                                        voternames.append(payload.member.name)
+                                        votermentions.append(payload.member.mention)
+                                        voting_action = payload.member.mention + ' has voted for ' + '**' + guild.get_member(alive[emotes.index(payload.emoji.name)]).display_name + '**.'
+                                        voting_receipt = '**' + payload.member.display_name + '** has voted for ' + '**' + guild.get_member(alive[emotes.index(payload.emoji.name)]).display_name + '**.'
+                                        await day_chat.send(voting_receipt)
+                                        print('A')
+                                        if voting_message.startswith('Voting has begun! Use `m!votes` to see a condensed voting record.\n\n*No one has voted yet.*\n'):
+                                            voting_message = voting_message.replace('*No one has voted yet.*', voting_action)
+                                        else:
+                                            print(voting_action)
+                                            print(voting_message.replace('\n\n**Majority: **', '\n\n' + voting_action + '\n\n**Majority: **'))
+                                            voting_message = voting_message.replace('\n\n**Majority: **', '\n\n' + voting_action + '\n\n**Majority: **')
+                                            print('B')
+                                        await message.remove_reaction(payload.emoji, payload.member)
+                                    else:
+                                        await message.remove_reaction(payload.emoji, payload.member)
+                            else:  # players who have already voted
+                                if payload.emoji.name == '✅' or payload.emoji.name == '❌':
+                                    if payload.emoji.name == '✅':
+                                        if not votes[voters.index(payload.member.id)] == 'None':
+                                            votes[voters.index(payload.member.id)] = 'None'
+                                            votenames[voters.index(payload.member.id)] = 'None'
+                                            votementions[voters.index(payload.member.id)] = 'None'
+                                            voting_action = payload.member.mention + ' has no-voted.'
+                                            voting_receipt = '**' + payload.member.display_name + '** has no-voted.'
+                                            await day_chat.send(voting_receipt)
+                                            if voting_message.startswith('Voting has begun! Use `m!votes` to see a condensed voting record.\n\n*No one has voted yet.*\n'):
+                                                voting_message = voting_message.replace('*No one has voted yet.*', voting_action)
+                                            else:
+                                                voting_message = voting_message.replace('\n\n**Majority: **', '\n\n' + voting_action + '\n\n**Majority: **')
+                                            await message.remove_reaction(payload.emoji, payload.member)
+                                        else:
+                                            await message.remove_reaction(payload.emoji, payload.member)
+                                    elif payload.emoji.name == '❌':
+                                        votes.pop(voters.index(payload.member.id))
+                                        votenames.pop(voters.index(payload.member.id))
+                                        votementions.pop(voters.index(payload.member.id))
+                                        voters.remove(payload.member.id)
+                                        voternames.remove(payload.member.name)
+                                        votermentions.remove(payload.member.mention)
+                                        voting_action = payload.member.mention + ' changed their mind.'
+                                        voting_receipt = '**' + payload.member.display_name + '** changed their mind.'
+                                        await day_chat.send(voting_receipt)
+                                        if voting_message.startswith('Voting has begun! Use `m!votes` to see a condensed voting record.\n\n*No one has voted yet.*\n'):
+                                            voting_message = voting_message.replace('*No one has voted yet.*', voting_action)
+                                        else:
+                                            voting_message = voting_message.replace('\n\n**Majority: **', '\n\n' + voting_action + '\n\n**Majority: **')
+                                        await message.remove_reaction(payload.emoji, payload.member)
+                                else:
+                                    if not payload.member.id == alive[emotes.index(payload.emoji.name)]:
+                                        if not votes[voters.index(payload.member.id)] == alive[emotes.index(payload.emoji.name)]:
+                                            votes[voters.index(payload.member.id)] = alive[emotes.index(payload.emoji.name)]
+                                            votenames[voters.index(payload.member.id)] = alivenames[emotes.index(payload.emoji.name)]
+                                            votementions[voters.index(payload.member.id)] = alivementions[emotes.index(payload.emoji.name)]
+                                            voting_action = payload.member.mention + ' has voted for ' + '**' + guild.get_member(alive[emotes.index(payload.emoji.name)]).display_name + '**.'
+                                            voting_receipt = '**' + payload.member.display_name + '** has voted for ' + '**' + guild.get_member(alive[emotes.index(payload.emoji.name)]).display_name + '**.'
+                                            await day_chat.send(voting_receipt)
+                                            if voting_message.startswith('**Voting has begun! Use `m!votes` to see a condensed voting record.**\n\n*No one has voted yet.*\n'):
+                                                voting_message = voting_message.replace('*No one has voted yet.*', voting_action)
+                                            else:
+                                                voting_message = voting_message.replace('\n\n**Majority: **', '\n\n' + voting_action + '\n\n**Majority: **')
+                                            await message.remove_reaction(payload.emoji, payload.member)
+                                        else:
+                                            await message.remove_reaction(payload.emoji, payload.member)
+                                    else:
+                                        await message.remove_reaction(payload.emoji, payload.member)
+                            print('C')
+                            with open(mafiguildvalue(guild, 'gameopen'), 'r') as fp:
+                                contents = fp.readlines()
+                            contents[mafigameindex('votes')] = mafigameprefix('votes') + str(votes) + '\n'
+                            contents[mafigameindex('votenames')] = mafigameprefix('votenames') + str(votenames) + '\n'
+                            contents[mafigameindex('votementions')] = mafigameprefix('votementions') + str(votementions) + '\n'
+                            contents[mafigameindex('voters')] = mafigameprefix('voters') + str(voters) + '\n'
+                            contents[mafigameindex('voternames')] = mafigameprefix('voternames') + str(voternames) + '\n'
+                            contents[mafigameindex('votermentions')] = mafigameprefix('votermentions') + str(votermentions) + '\n'
+                            with open(mafiguildvalue(guild, 'gameopen'), 'w') as fp:
+                                fp.writelines(contents)
+                            fp.close()
+                            print('D')
+                            try:
+                                print(voting_message)
+                                await message.edit(content=voting_message)
+                                print('E')
+                            except:
+                                print('F')
+                                if channel.last_message_id == message.id:
+                                    if not voting_action == 'None':
                                         await channel.send('Ballot too long!\n\n' + voting_action)
-                    else:
-                        await message.remove_reaction(payload.emoji, payload.member)
+                                else:
+                                    last_message = await channel.fetch_message(channel.last_message_id)
+                                    if not voting_action == 'None':
+                                        new_content = last_message.content + '\n\n' + voting_action
+                                        try:
+                                            await last_message.edit(content=new_content)
+                                        except:
+                                            await channel.send('Ballot too long!\n\n' + voting_action)
+                        else:
+                            await message.remove_reaction(payload.emoji, payload.member)
+    except FileNotFoundError:
+        pass
 
 
-neverSleep.awake('https://MafiosoBot.daynightcycle.repl.co', False)
 bot.run(os.getenv('TOKEN'))
