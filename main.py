@@ -23,7 +23,7 @@ bot = commands.Bot(command_prefix='m!', intents=intents)
 # Permission Checks
 
 
-# Checks if the command message's author is an owner of the command message's guild.
+# Checks if a command message's author is an owner of a command message's guild.
 # https://discordpy.readthedocs.io/en/stable/ext/commands/commands.html#checks
 def is_guild_owner():
     def predicate(ctx):
@@ -31,13 +31,13 @@ def is_guild_owner():
     return commands.check(predicate)
 
 
-# Checks if the command message's author has the host role designated for their guild.
+# Checks if a command message's author has the host role designated for their guild.
 # https://discordpy.readthedocs.io/en/stable/ext/commands/commands.html#checks
 # https://discordpy.readthedocs.io/en/stable/api.html#discord.Guild.id
 def is_host():
     def predicate(ctx):
-        host_role_id = get_guild_value(ctx, 'role_host')  # This gets the ID for the server's host role.
-        for role in ctx.author.roles:  # Each role the command message's author has is checked. If they have the host role, the module predicate() returns True.
+        host_role_id = get_guild_value(ctx.guild.id, 'role_host')  # This gets the ID for a server's host role.
+        for role in ctx.author.roles:  # Each role a command message's author has is checked. If they have the host role, the module predicate() returns True.
             if role.id == host_role_id:
                 return True
     return commands.check(predicate)
@@ -46,36 +46,34 @@ def is_host():
 # ID and File Search
 
 
-# Returns a Discord ID for a channel or role saved to the guide file. This module should NOT be used to get a guild's game file; use get_game_file() instead.
+# Returns a Discord ID for a channel or role saved to a guide file. This module should NOT be used to get a guild's game file; use get_game_file() instead.
 # https://stackabuse.com/python-remove-the-prefix-and-suffix-from-a-string/
-def get_guild_value(ctx, target):
-    guild_file = 'guild' + str(ctx.message.guild.id) + '.txt'  # Uses the command message's guild ID to construct the guild file path.
-    if exists(guild_file):  # Checks if the guild file path exists.
-        with open(guild_file, 'r') as fp:  # Reads the guild file into the contents[] list.
-            contents = fp.readlines()
-            if get_guild_index(target) < 16:
-                return int(contents[get_guild_index(target)][len(get_guild_prefix(target)):].strip('\n'))  # Removes the prefix and line breaks from the target guild ID. The guild ID is converted to an integer and returned.
-            else:
-                return contents[19][len('Game Open: '):].strip('\n')  # Removes the prefix and line breaks from the target game file. The game file is returned as a string.
-    else:
-        await ctx.channel.send('Guild file not found.')
-        return None  # None is returned if no guild file has been created yet.
+def get_guild_value(guild_file, target):
+    with open(guild_file, 'r') as fp:  # Reads a guild file into the contents[] list.
+        contents = fp.readlines()
+        if get_guild_index(target) < 16:
+            return int(contents[get_guild_index(target)][len(get_guild_prefix(target)):].strip('\n'))  # Removes the prefix and line breaks from a target guild ID. The guild ID is converted to an integer and returned.
+        else:
+            return contents[19][len('Game Open: '):].strip('\n')  # Removes the prefix and line breaks from a target game file. The game file is returned as a string.
 
 
 #  Returns a game value saved to a guild's game file.
 # https://stackabuse.com/python-remove-the-prefix-and-suffix-from-a-string/
-def get_game_value(ctx, target):
-    game_file = get_guild_value(ctx, 'game_open')
-    if exists(game_file):  # Checks if the game file path exists.
-        with open(game_file, 'r') as fp:  # Reads the game file into the contents[] list.
-            contents = fp.readlines()
-            if get_guild_index(target) == 1:
-                return int(contents[1][len('Time: '):].strip('\n'))  # Removes the prefix and line breaks from the time value. The time value is returned as a string.
-            else:
-                return ast.literal_eval(contents[get_game_index(target)][len(get_game_prefix(target)):].strip('\n'))  # Removes the prefix and line breaks from the target game value. The game value is returned as a list.
-    else:
-        await ctx.channel.send('Guild file not found.')
-        return None  # None is returned if no game file has been created yet.
+def get_game_value(game_file, target):
+    with open(game_file, 'r') as fp:  # Reads a game file into the contents[] list.
+        contents = fp.readlines()
+        if get_guild_index(target) == 1:
+            return int(contents[1][len('Time: '):].strip('\n'))  # Removes the prefix and line breaks from a time value. The time value is returned as a string.
+        else:
+            return ast.literal_eval(contents[get_game_index(target)][len(get_game_prefix(target)):].strip('\n'))  # Removes the prefix and line breaks from a target game value. The game value is returned as a list.
+
+
+# Returns a channel associated with a given user in a given guild.
+def get_user_channel(guild, user_id):
+    user_file = 'user' + str(user_id) + '_' + str(guild.id) + '.txt'  # Uses an input user ID and the command message's guild ID to construct a user file path.
+    with open(user_file, 'r') as fp:  # Reads a user file into the contents[] list.
+        contents = fp.readlines()
+    return ast.literal_eval(contents[0])[2]  # The value is returned as an element in a list.
 
 
 # Guild File Shortcuts
@@ -284,6 +282,40 @@ def get_game_prefix(target):
         return 'Coven Mentions: '
 
 
+# Math
+
+
+# Returns the majority of a given number.
+def majority(number):
+    if number == 0:
+        return 'None'
+    else:
+        if (number % 2) == 0:  # If the number is even, the majority is half plus 1.
+            return int(number / 2 + 1)
+        else:  # If the number is odd, the majority is half plus 0.5.
+            return int(number / 2 + 0.5)
+
+
+# Outputs True if majority vote has been reached, and False if it has not been reached.
+def majority_vote_reached(game_file):
+    votes_list = get_game_value(game_file, 'votes')  # Gets a list of votes from a guild's game file.
+    if len(votes_list) > 0:  # If there are zero votes, False is returned.
+        if votes_list.count(most_common_element(votes_list)) >= majority(len(get_game_value(game_file, 'alive'))):  # If the number of votes is greater than or equal to the majority of living players, True is returned.
+            return True
+        else:
+            return False
+    else:
+        return False
+
+
+# Returns the most common element in a list.
+# https://docs.python.org/3/library/collections.html
+# https://stackoverflow.com/questions/1518522/find-the-most-common-element-in-a-list
+def most_common_element(in_list):
+    data = Counter(in_list)
+    return data.most_common(1)[0][0]
+
+
 # Setup
 
 
@@ -291,8 +323,8 @@ def get_game_prefix(target):
 @bot.command()
 @commands.check_any(is_guild_owner(), commands.is_owner())  # This command may only be used by guild admins or MafiosoBot's owner.
 async def server_setup(ctx):
-    guild_file = 'guild' + str(ctx.message.guild.id) + '.txt'  # Uses the command message's guild ID to construct the guild file path.
-    if not exists(guild_file):  # Checks if the game file path exists.
+    guild_file = 'guild' + str(ctx.guild.id) + '.txt'  # Uses a command message's guild ID to construct a guild file path.
+    if not exists(guild_file):  # Checks if a game file path exists.
         with open(guild_file, 'w') as fp:  # Creates and writes to guild file.
             fp.write(ctx.message.guild.name + '\nAnnouncement Channel: \nBot Log Channel: \nCoven Channel: \nD2M Channel: \nData Channel: \nDay Phase Channel: \nDead Channel: \nDead Role: \nEnd Channel: \nExample User: \nHost Channel: \nHost Role: \nInterest Check Channel: \nM2D Channel: \nMafia Channel: \nPlayer Role: \nSeance Channel: \nVoting Channel: \nGame Open: None\n')
         await ctx.channel.send(guild_file + ' has been created for **' + ctx.message.guild.name + '.**')
@@ -304,15 +336,15 @@ async def server_setup(ctx):
 @bot.command()
 @commands.check_any(is_guild_owner(), commands.is_owner())  # This command may only be used by guild admins or MafiosoBot's owner.
 async def hosts(ctx, in_role):
-    guild_file = 'guild' + str(ctx.message.guild.id) + '.txt'  # Uses the command message's guild ID to construct the guild file path.
-    with open(guild_file, 'r') as fp:  # Reads the guild file into the contents[] list.
+    guild_file = 'guild' + str(ctx.guild.id) + '.txt'  # Uses a command message's guild ID to construct a guild file path.
+    with open(guild_file, 'r') as fp:  # Reads a guild file into a contents[] list.
         contents = fp.readlines()
     if in_role.isdigit():  # First, this module checks if the user input a raw role ID.
         for role in ctx.message.guild.roles:
             if role.id == in_role:
                 role_name = role.name
                 contents[11] = 'Host Role: ' + str(role.id) + '\n'  # A role that has the input ID is designated the host role.
-    elif in_role.startswith('<@&'):  # Secondly, this module checks if the user input a role mention.
+    elif in_role.startswith('<@&'):  # Next, this module checks if the user input a role mention.
         role_id = int(in_role[len('<@&'):len('>')])  # The mention is stripped of its prefix and suffix.
         for role in ctx.message.guild.roles:
             if role.id == role_id:
@@ -323,7 +355,7 @@ async def hosts(ctx, in_role):
             if role.name == in_role:
                 role_name = role.name
                 contents[11] = 'Host Role: ' + str(role.id) + '\n'  # A role that has the same name as the input string is designated the host role.
-    with open(guild_file, 'w') as fp:  # Writes the updated contents[] list to the guild file.
+    with open(guild_file, 'w') as fp:  # Writes the updated contents[] list to a guild file.
         fp.writelines(contents)
     await ctx.channel.send('**' + role_name + '**' + ' is now the Host Role.')
 
@@ -332,23 +364,23 @@ async def hosts(ctx, in_role):
 @bot.command()
 @commands.check_any(is_guild_owner(), is_host(), commands.is_owner())  # This command may only be used by guild admins, guild members with the designated host role, or MafiosoBot's owner.
 async def create_game(ctx):
-    guild = ctx.message.guild  # Writes the command message's guild ID to a variable.
-    if get_guild_value(ctx, 'game_open') == 'None':  # If there is no game file associated with the guild, a game file is created.
-        hosts_list = [member.id for member in get_guild_value(ctx, 'role_host')]  # The IDs of members with the designated host role are added to this list.
-        host_names_list = [member.name for member in get_guild_value(ctx, 'role_host')]  # The names of members with the designated host role are added to this list.
-        host_mentions_list = [member.mention for member in get_guild_value(ctx, 'role_host')]  # The mention strings of members with the designated host role are added to this list.
-        alive_list = [member.id for member in get_guild_value(ctx, 'role_player')]  # The IDs of members with the designated player role are added to this list.
-        alive_names_list = [member.name for member in get_guild_value(ctx, 'role_player')]  # The names of members with the designated player role are added to this list.
-        alive_mentions_list = [member.mention for member in get_guild_value(ctx, 'role_player')]  # The mention strings of members with the designated player role are added to this list.
+    guild_file = 'guild' + str(ctx.guild.id) + '.txt'  # Uses a command message's guild ID to construct a guild file path.
+    if not exists(get_guild_value(guild_file, 'game_open')):  # If there is no valid game file associated with the guild, a game file is created.
+        hosts_list = [member.id for member in get_guild_value(guild_file, 'role_host')]  # The IDs of members with a designated host role are added to this list.
+        host_names_list = [member.name for member in get_guild_value(guild_file, 'role_host')]  # The names of members with a designated host role are added to this list.
+        host_mentions_list = [member.mention for member in get_guild_value(guild_file, 'role_host')]  # The mention strings of members with a designated host role are added to this list.
+        alive_list = [member.id for member in get_guild_value(guild_file, 'role_player')]  # The IDs of members with a designated player role are added to this list.
+        alive_names_list = [member.name for member in get_guild_value(guild_file, 'role_player')]  # The names of members with a designated player role are added to this list.
+        alive_mentions_list = [member.mention for member in get_guild_value(guild_file, 'role_player')]  # The mention strings of members with a designated player role are added to this list.
         emotes = []
         unused_emotes = ['❤', '🍎', '📙', '🔥', '⭐', '🌻', '🌖', '🟢', '🌲', '🔷', '🎵', '🌊', '🟪', '☂', '🌈', '☁', '⚙', '⚽', '📷', '🔑']
         for _ in range(len(alive)):  # Random emojis are assigned to players; these are used to voting with role reactions.
             user_emote = random.choice(unused_emotes)
             unused_emotes.remove(user_emote)
             emotes.append(user_emote)
-        dead_list = [member.id for member in get_guild_value(ctx, 'role_dead')]  # The IDs of members with the designated dead role are added to this list.
-        dead_names_list = [member.name for member in get_guild_value(ctx, 'role_dead')]  # The names of members with the designated dead role are added to this list.
-        dead_mentions_list = [member.mention for member in get_guild_value(ctx, 'role_dead')]  # The mention strings of members with the designated dead role are added to this list.
+        dead_list = [member.id for member in get_guild_value(guild_file, 'role_dead')]  # The IDs of members with a designated dead role are added to this list.
+        dead_names_list = [member.name for member in get_guild_value(guild_file, 'role_dead')]  # The names of members with a designated dead role are added to this list.
+        dead_mentions_list = [member.mention for member in get_guild_value(guild_file, 'role_dead')]  # The mention strings of members with a designated dead role are added to this list.
         with open('game_count.txt', 'w+') as fp:  # Opens game count file for reading and writing, adding 1 to the game count.
             contents = fp.readlines()
             game_id = int(contents[0]) + 1
@@ -356,24 +388,24 @@ async def create_game(ctx):
         game_file = 'game' + str(game_id) + '.txt'
         with open(game_file, 'w') as fp:  # Creates and writes to game file.
             fp.write('ID: ' + str(game_id) + '\nTime: 0\nHosts: ' + str(hosts_list) + '\nHost Names: ' + str(host_names_list) + '\nHost Mentions: ' + str(host_mentions_list) + '\nAlive: ' + str(alive_list) + '\nAlive Names: ' + str(alive_names_list) + '\nAlive Mentions: ' + str(alive_mentions_list) + '\nEmotes: ' + str(emotes) + '\nDead: ' + str(dead_list) + '\nDead Names: ' + str(dead_names_list) + '\nDead Mentions: ' + str(dead_mentions_list) + '\nVotes: []\nVote Names: []\nVote Mentions: []\nVoters: []\nVoter Names: []\nVoter Mentions: []\nEarly Voters: []\nEarly Voter Names: []\nEarly Voter Mentions: []\nMediums: []\nMedium Names: []\nMedium Mentions: []\nSeances: []\nMafia: []\nMafia Names: []\nMafia Mentions: []\nCoven: []\nCoven Names: []\nCoven Mentions: []')
-        with open('guild' + str(guild.id) + '.txt', 'w+'):  # Uses the command message's guild ID to construct the guild file path, read the guild file into the contents[] list, and update the game file value.
+        with open(guild_file, 'w+'):  # Reads a guild file into the contents[] list and update the Game Open value.
             contents = fp.readlines()
             contents[16] = 'Game Open: ' + game_file
             fp.writelines(contents)
-        await ctx.channel.send(game_file + ' has been created for **' + guild.name + '.**')
+        await ctx.channel.send(game_file + ' has been created for **' + ctx.guild.name + '.**')
         # Role and Channel IDs are written to variables to set permissions.
-        role_player = get(guild.roles, id=get_guild_value(ctx, 'role_player'))
-        role_dead = get(guild.roles, id=get_guild_value(ctx, 'role_dead'))
-        chan_ann = bot.get_channel(get_guild_value(ctx, 'chan_ann'))
-        chan_bot = bot.get_channel(get_guild_value(ctx, 'chan_bot'))
-        chan_coven = bot.get_channel(get_guild_value(ctx, 'chan_coven'))
-        chan_data = bot.get_channel(get_guild_value(ctx, 'chan_data'))
-        chan_day = bot.get_channel(get_guild_value(ctx, 'chan_day'))
-        chan_dead = bot.get_channel(get_guild_value(ctx, 'chan_dead'))
-        chan_end = bot.get_channel(get_guild_value(ctx, 'chan_end'))
-        chan_host = bot.get_channel(get_guild_value(ctx, 'chan_host'))
-        chan_mafia = bot.get_channel(get_guild_value(ctx, 'chan_mafia'))
-        chan_vote = bot.get_channel(get_guild_value(ctx, 'chan_vote'))
+        role_player = get(guild.roles, id=get_guild_value(guild_file, 'role_player'))
+        role_dead = get(guild.roles, id=get_guild_value(guild_file, 'role_dead'))
+        chan_ann = bot.get_channel(get_guild_value(guild_file, 'chan_ann'))
+        chan_bot = bot.get_channel(get_guild_value(guild_file, 'chan_bot'))
+        chan_coven = bot.get_channel(get_guild_value(guild_file, 'chan_coven'))
+        chan_data = bot.get_channel(get_guild_value(guild_file, 'chan_data'))
+        chan_day = bot.get_channel(get_guild_value(guild_file, 'chan_day'))
+        chan_dead = bot.get_channel(get_guild_value(guild_file, 'chan_dead'))
+        chan_end = bot.get_channel(get_guild_value(guild_file, 'chan_end'))
+        chan_host = bot.get_channel(get_guild_value(guild_file, 'chan_host'))
+        chan_mafia = bot.get_channel(get_guild_value(guild_file, 'chan_mafia'))
+        chan_vote = bot.get_channel(get_guild_value(guild_file, 'chan_vote'))
         # Players and dead are not allowed to change nicknames; this is to avoid confusion during voting or deduction.
         await role_player.edit(permissions=discord.Permissions(change_nickname=False))
         await role_dead.edit(permissions=discord.Permissions(change_nickname=False))
@@ -403,56 +435,16 @@ async def create_game(ctx):
         await ctx.channel.send('There is already an active game in this server.')  # This is returned is a game file for a guild already exists.
 
 
-# unedited
-
-
-# User Shortcuts
-
-
-def mafiuserchan(guild, user_id):
-    user_file = 'user' + str(user_id) + '_' + str(guild.id) + '.txt'
-    with open(user_file, 'r') as fp:
-        contents = fp.readlines()
-    user_list = ast.literal_eval(contents[0])
-    return user_list[2]
-
-
-# Math
-
-
-def majority(number):
-    if number in [0, 1, 2]:
-        return 'None'
-    else:
-        if (number % 2) == 0:
-            return int(number / 2 + 1)
-        else:
-            return int(number / 2 + 0.5)
-
-
-def majority_vote(guild):
-    if len(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'votes')) > 0:
-        if mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'votes').count(most_common(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'votes'))) >= majority(len(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'alive'))):
-            return True
-        else:
-            return False
-    else:
-        return False
-
-
-def most_common(in_list):
-    data = Counter(in_list)
-    return data.most_common(1)[0][0]
-
-
 # Permissions: Hosts
 
 
+# Adds a user to the Coven faction.
 @bot.command()
 @commands.check_any(is_guild_owner(), is_host(), commands.is_owner())  # This command may only be used by guild admins, guild members with the designated host role, or MafiosoBot's owner.
-async def addcov(ctx, in_user):
-    guild = ctx.message.guild
-    if exists(mafiguildvalue(guild, 'gameopen')):
+async def add_coven(ctx, in_user):
+    guild_file = 'guild' + str(ctx.guild.id) + '.txt'  # Uses a command message's guild ID to construct a guild file path.
+    if exists(get_guild_value(guild_file, 'game_open')):  # If there is a valid game file associated with a guild, a game file is created.
+        # unedited
         coven = mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'coven')
         covennames = mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'covennames')
         covenmentions = mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'covenmentions')
@@ -1038,7 +1030,7 @@ async def startday(ctx):
         while True:
             await asyncio.sleep(1)
             counter += 1
-            if 172800 <= counter or majority_vote(guild):
+            if 172800 <= counter or majority_vote_reached(guild):
                 await ballot.clear_reactions()
                 await day_chat.set_permissions(players, send_messages=False, add_reactions=False)
                 await day_chat.send('**Day Phase is closed!**')
@@ -1181,7 +1173,7 @@ async def on_message(message):
                     if not mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'mediums') == []:
                         if message.channel.id == mafiguildvalue(guild, 'chandead'):
                             for i in range(len(mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'mediums'))):
-                                personal_chat = bot.get_channel(mafiuserchan(guild, mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'mediums')[i]))
+                                personal_chat = bot.get_channel(get_user_channel(guild, mafigamevalue(mafiguildvalue(guild, 'gameopen'), 'mediums')[i]))
                                 output = '**' + message.author.display_name + ':** ' + message.content
                                 if not message.attachments == []:
                                     for i in range(len(message.attachments)):
